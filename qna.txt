@@ -1,0 +1,534 @@
+# Generate data set or take photo samples
+
+    def generate_dataset(self):
+        if self.var_dep.get() == "Select Department" or self.var_std_name.get() == "" or self.va_std_id.get() == "":
+            messagebox.showerror(
+                "Error", "All Fileds are required", parent=self.root)
+
+        else:
+            try:
+                #conn = mysql.connector.connect(host="sql6.freemysqlhosting.net", user="sql6495753", password="KLdC4PA9zU",
+                 #                             database="sql6495753", auth_plugin="mysql_native_password")            #please change it accoridng to database
+                #my_cursor = conn.cursor()
+                
+                # conn = mysql.connector.connect(host="localhost", user="root", password="Aryan@123",
+                                            #   database="face_Recognition", auth_plugin="mysql_native_password")            #please change it accoridng to database
+                conn = pymysql.connect(host="localhost", port=3306, user="root", password="", database="face_recognition")
+                my_cursor = conn.cursor()
+                my_cursor.execute("select * from student")
+                myresult = my_cursor.fetchall()
+                id = 0
+                for x in myresult:
+                    id += 1
+                my_cursor.execute("Update student set Dep=%s,Course=%s,Year=%s,Semester=%s,Division=%s,Name=%s,Roll=%s,Gender=%s,Dob=%s,Email=%s,Phone=%s,Address=%s,Teacher=%s,PhotoSample=%s where Student_id=%s", (
+                    self.var_dep.get(),
+                    self.var_course.get(),
+                    self.var_year.get(),
+                    self.var_semester.get(),
+                    self.var_div.get(),
+                    self.var_std_name.get(),
+                    self.var_roll.get(),
+                    self.var_gender.get(),
+                    self.var_dob.get(),
+                    self.var_email.get(),
+                    self.var_phone.get(),
+                    self.var_address.get(),
+                    self.var_teacher.get(),
+                    self.var_radio1.get(),
+                    self.va_std_id.get() == id+1
+
+                ))
+                conn.commit()
+                self.fetch_data()
+                # self.reset_data()
+                conn.close()
+
+                # load predefined data on face frontals from openCv
+
+                face_classifier = cv2.CascadeClassifier(
+                    "haarcascade_frontalface_default.xml")
+
+                def face_cropped(img):
+                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    faces = face_classifier.detectMultiScale(gray, 1.3, 5)
+
+                    # scaling factor = 1.3
+                    # Minimum Neighbor=5
+
+                    for (x, y, w, h) in faces:
+                        face_cropped = img[y:y+h, x:x+w]
+                        return face_cropped
+
+                cap = cv2.VideoCapture(0)
+                img_id = 0
+                while True:
+                    ret, my_frame = cap.read()
+                    if face_cropped(my_frame) is not None:
+                        img_id += 1
+                        face = cv2.resize(face_cropped(my_frame), (450, 450))
+                        face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+                        file_name_path = "data/user." + \
+                            str(id)+"."+str(img_id)+".jpg"
+                        cv2.imwrite(file_name_path, face)
+                        cv2.putText(face, str(img_id), (50, 50),
+                                    cv2.FONT_HERSHEY_COMPLEX, 2, (0, 255, 0), 2)
+                        cv2.imshow("Crooped Face", face)
+
+                    if cv2.waitKey(1) == 13 or int(img_id) == 100:
+                        break
+                cap.release()
+                cv2.destroyAllWindows()
+                messagebox.showinfo("Result", "Generating data set completed",parent=self.root)
+                open_main=messagebox.askyesno("Yes No","Do you want to train images now?",parent=self.root)
+                if open_main>0:
+                    self.train_classifier()
+                else:
+                    return
+            except Exception as es:
+                messagebox.showerror(
+                    "Error", f"Due to:{str(es)}", parent=self.root)
+    
+
+    #train face data
+
+    def train_classifier(self):
+        data_dir=("data")
+        path=[os.path.join(data_dir,file) for file in os.listdir(data_dir)]
+
+        faces=[]
+        ids=[]
+        
+        for image in path:
+            img=Image.open(image).convert('L')   #Gray scale image
+            imageNp=np.array(img,'uint8')
+            id=int(os.path.split(image)[1].split('.')[1])
+
+            faces.append(imageNp)
+            ids.append(id)
+
+            cv2.imshow("Train",imageNp)
+            cv2.waitKey(1)==13
+        ids=np.array(ids)
+
+        #Train the classifier and save
+
+        clf=cv2.face.LBPHFaceRecognizer_create()
+        clf.train(faces,ids)
+        
+        clf.write("classifier.xml")
+        cv2.destroyAllWindows()
+        messagebox.showinfo("Result","Training datasets completed",parent=self.root)
+
+explain how it is working
+ChatGPT
+This Python code appears to be part of a program that is used for generating a dataset of facial images for face recognition and training a face recognition classifier. Let's break down how it works step by step:
+
+Generate Dataset (generate_dataset function):
+
+The function is triggered by a button press or some user action.
+It checks if certain fields (department, student name, student ID) are not empty, and if "Select Department" is not chosen. If any of these conditions are not met, it shows an error message.
+It establishes a connection to a MySQL or MariaDB database using pymysql.
+It fetches all records from the "student" table in the database.
+It calculates the next available student ID by counting the number of records and incrementing it.
+It updates a record in the "student" table with various student details (e.g., department, course, gender, etc.) based on user input.
+It saves the cropped face images of the student in a directory named "data." These images are captured from the webcam using OpenCV when a face is detected in the video stream.
+It continues to capture images until either the user presses Enter or 100 images are captured.
+Finally, it shows a message indicating that the dataset generation is complete and asks the user if they want to train the classifier.
+Train Classifier (train_classifier function):
+
+This function is called when the user chooses to train the classifier.
+It specifies a directory ("data") where the facial images are stored.
+It creates a list of image file paths in that directory.
+It initializes two lists, faces and ids, to store the grayscale face images and corresponding student IDs.
+It iterates through the image files:
+Loads each image, converts it to grayscale, and stores it as a NumPy array.
+Extracts the student ID from the image filename.
+Appends the grayscale image and the student ID to their respective lists.
+Displays the image for a brief moment.
+It converts the ids list to a NumPy array.
+It initializes a LBPH (Local Binary Pattern Histogram) face recognizer using OpenCV.
+It trains the recognizer with the grayscale face images and corresponding student IDs.
+It saves the trained classifier as an XML file named "classifier.xml."
+Finally, it shows a message indicating that the training is complete.
+It's important to note that this code assumes a database with a "student" table and a directory named "data" for storing face images. The face detection is done using the Haar Cascade classifier, and face recognition is performed using the LBPH face recognizer. Additionally, the code uses various libraries and frameworks such as OpenCV, NumPy, and PIL (Python Imaging Library) for image manipulation and recognition tasks.
+
+Please make sure that you have the necessary libraries installed, the database configured, and the file paths set correctly for this code to work as intended.
+
+
+
+
+User
+from tkinter import*
+from tkinter import ttk
+from PIL import Image, ImageTk
+from tkinter import messagebox
+from setuptools import Command
+#import mysql.connector
+import cv2
+import os
+import numpy as np
+from time import strftime
+from datetime import datetime
+import pymysql
+
+class Face_recognition:
+    def __init__(self, root):
+        self.root = root
+        self.root.geometry("15300x7900+0+0")
+        self.root.title("Face Recognition System")
+        self.root.wm_iconbitmap("face.ico")
+
+        # background
+
+        bg1_lbl = Frame(self.root, bg="#1A3C40")
+        bg1_lbl.place(x=0, y=0, width=15300, height=10000)
+
+        title_lbl = Label(bg1_lbl, text="STUDENT MANAGEMENT SYSTEM", font=(
+            "times new roma", 35, "bold"),bg="#B8F1B0", fg="#16003B")
+        title_lbl.place(x=0, y=40, width=1530, height=45)
+
+        # detect face button
+
+        img3 = Image.open(
+            r"images\face.jpg")
+        img3 = img3.resize((300, 300), Image.ANTIALIAS)
+        self.photoimg3 = ImageTk.PhotoImage(img3)
+
+        b1 = Button(bg1_lbl, image=self.photoimg3, cursor="hand2",command=self.face_recog)
+        b1.place(x=600, y=200, width=300, height=300)
+
+        b1_1 = Button(bg1_lbl, text="Face Detector", cursor="hand2",command=self.face_recog, font=(
+            "times new roman", 15, "bold"), bg="#764AF1", fg="white",activeforeground="white", activebackground="red")
+        b1_1.place(x=600, y=500, width=300, height=40)
+
+
+
+
+    #Attendance
+
+    def mark_attendance(self,i,r,n,d):
+        with open("Attendance_Report/Attendance.csv","r+",newline="\n") as f:
+            myDataList=f.readlines()
+            name_list=[]
+            for line in myDataList:
+                entry=line.split((","))
+                name_list.append(entry[0])
+
+            if((i not in name_list) and (r not in name_list) and (n not in name_list) and (d not in name_list)):
+                now=datetime.now()
+                d1=now.strftime("%d/%m/%Y")
+                dtString=now.strftime("%H:%M:%S")
+                f.writelines(f"{i},{r},{n},{d},{dtString},{d1},Present\n")
+            
+
+
+
+
+    # Face Recognition
+
+    def face_recog(self):
+        def draw_boundary(img, classifier, scaleFactor, minNeighbors, color, text, clf):
+            gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            features = classifier.detectMultiScale(
+                gray_image, scaleFactor, minNeighbors)
+
+            coord =[]
+
+            for (x, y, w, h) in features:
+                cv2.rectangle(img,(x, y), (x+w, y+h), (0, 255, 0), 3)
+                id, predict = clf.predict(gray_image[y:y+h, x:x+w])
+                confidence = int((100*(1-predict/300)))
+
+                #conn = mysql.connector.connect(host="sql6.freemysqlhosting.net", user="sql6495753", password="KLdC4PA9zU",
+                 #                             database="sql6495753", auth_plugin="mysql_native_password")            #please change it accoridng to database
+                #my_cursor = conn.cursor()
+                
+                # conn = mysql.connector.connect(host="localhost", user="root", password="Aryan@123",
+                #                               database="face_recognition", auth_plugin="mysql_native_password")            #please change it accoridng to database
+                conn = pymysql.connect(host="localhost", port=3306, user="root", password="", database="face_recognition")
+                my_cursor = conn.cursor()
+
+                my_cursor.execute(
+                    "select Name from student where Student_id="+str(id))
+                n = my_cursor.fetchone()
+                n = "+".join(n)
+
+                my_cursor.execute(
+                    "select Roll from student where Student_id="+str(id))
+                r = my_cursor.fetchone()
+                r = "+".join(r)
+
+                my_cursor.execute(
+                    "select Dep from student where Student_id="+str(id))
+                d = my_cursor.fetchone()
+                d = "+".join(d)
+
+                my_cursor.execute(
+                    "select Student_id from student where Student_id="+str(id))
+                i = my_cursor.fetchone()
+                i = "+".join(i)
+
+                if confidence > 79:
+                    cv2.putText(img,f"Id: {i}",(x,y-75),cv2.FONT_HERSHEY_SIMPLEX,0.8,(255,255,255),3)
+                    cv2.putText(img,f"Roll: {r}",(x,y-55),cv2.FONT_HERSHEY_SIMPLEX,0.8,(255,255,255),3)
+                    cv2.putText(img,f"Name: {n}",(x,y-30),cv2.FONT_HERSHEY_SIMPLEX,0.8,(255,255,255),3)
+                    cv2.putText(img,f"Department: {d}",(x,y-5),cv2.FONT_HERSHEY_SIMPLEX,0.8,(255,255,255),3)
+                    self.mark_attendance(i,r,n,d)
+                    
+
+                else:
+                    cv2.rectangle(img,(x, y), (x+w, y+h), (0,0,255), 3)
+                    cv2.putText(img,"Unknown Face",(x,y-5),cv2.FONT_HERSHEY_COMPLEX,0.8,(255,0,0),3)
+
+                coord=[x,y,w,h]
+
+            return coord
+        
+        def recognize(img,clf,faceCascade):
+            coord=draw_boundary(img,faceCascade,1.1,10,(255,25,255),"Face",clf)
+            return img
+            
+
+        faceCascade=cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+        clf=cv2.face.LBPHFaceRecognizer_create()
+        clf.read("classifier.xml")
+
+        video_cap=cv2.VideoCapture(0)
+
+        while True:
+            ret,img=video_cap.read()
+            img=recognize(img,clf,faceCascade)
+            cv2.imshow("Welcome to face recognizer",img)
+
+            if cv2.waitKey(1)==13:
+                break
+        video_cap.release()
+        cv2.destroyAllWindows()
+
+
+
+
+if __name__ == "__main__":
+    root = Tk()
+    obj = Face_recognition(root)
+    root.mainloop()
+
+
+then now how it mark attendance after training
+ChatGPT
+In the code you've provided, attendance is marked during the face recognition process after training the face recognition classifier. Let's break down how attendance is marked after training:
+
+Training the Face Recognition Classifier:
+
+The training of the face recognition classifier is done in the face_recog method.
+The classifier is initialized (clf) and loaded with the pre-trained data from the "classifier.xml" file.
+The webcam video stream is captured using cv2.VideoCapture(0).
+Face Recognition:
+
+The recognize function is called to perform face recognition on each frame of the video stream.
+Inside recognize, the draw_boundary function is used to detect and draw boundaries around faces in the frame.
+If a recognized face has high confidence (i.e., the classifier is reasonably sure of the identity), the following information is extracted from the database:
+Student ID (i)
+Roll Number (r)
+Name (n)
+Department (d)
+If the confidence is greater than 79 (you can adjust this threshold), the student's details are displayed on the video frame, and the mark_attendance function is called with the student's information.
+If the confidence is lower, the face is marked as "Unknown Face" on the frame.
+Marking Attendance:
+
+The mark_attendance function is responsible for marking attendance.
+It checks if the student's information (ID, Roll Number, Name, Department) is not already present in the attendance CSV file. If not, it proceeds to mark attendance.
+It records the date and time of attendance.
+It writes the student's information along with the attendance details (date and "Present" status) to the "Attendance.csv" file.
+Displaying the Result:
+
+The video stream with recognized faces and attendance markings is displayed in a window titled "Welcome to face recognizer."
+Exiting the Recognition:
+
+The recognition loop continues until the user presses the Enter key (cv2.waitKey(1) == 13).
+When the Enter key is pressed, the video capture is released (video_cap.release()), and all OpenCV windows are closed (cv2.destroyAllWindows()).
+So, after training the face recognition classifier and running the application, when a recognized face is detected with sufficient confidence, it marks the student's attendance by writing their information to the "Attendance.csv" file. The system continuously recognizes faces until the user decides to exit by pressing Enter.
+
+
+
+
+User
+how recognize is working
+ChatGPT
+The recognize function in your code is responsible for performing face recognition on each frame of the video stream captured from the webcam. Let's break down how the recognize function works:
+
+Input Parameters:
+
+img: This parameter represents a single frame of the video stream, which is essentially an image containing one or more faces.
+clf: This is the face recognition classifier that has been previously trained using LBPH (Local Binary Pattern Histogram) and loaded from the "classifier.xml" file.
+faceCascade: This is the Haar Cascade classifier used for face detection.
+Face Recognition Process:
+
+Inside the recognize function, the first step is to call the draw_boundary function, passing in the following parameters:
+img: The current frame or image.
+faceCascade: The Haar Cascade classifier for detecting faces.
+1.1: The scaleFactor parameter used for face detection. It controls how much the image size is reduced at each image scale.
+10: The minNeighbors parameter for face detection. It specifies how many neighbors each candidate rectangle should have to consider it a face.
+(255, 25, 255): The color used to draw boundaries around detected faces.
+"Face": A text label indicating that a face is being recognized.
+clf: The pre-trained face recognition classifier.
+Drawing Boundaries Around Detected Faces:
+
+The draw_boundary function is responsible for detecting faces in the current image (img) using the provided faceCascade classifier.
+It draws green rectangles around the detected faces using the specified color (255, 25, 255).
+For each detected face, it also attempts to recognize the face using the clf classifier.
+Face Recognition and Confidence:
+
+For each detected face, the draw_boundary function calls clf.predict on the face region to attempt face recognition.
+The predict method of the LBPH face recognizer returns an id (the predicted student ID) and a predict value (a confidence value).
+The confidence value represents how confident the classifier is in its prediction. Higher confidence values indicate a more confident prediction.
+If the confidence value is greater than 79 (you can adjust this threshold), it is considered a reasonably confident recognition.
+Displaying Recognized Information:
+
+If the recognition confidence is high enough (greater than 79), the following information is displayed on the image:
+Student ID (i)
+Roll Number (r)
+Name (n)
+Department (d)
+This information is obtained from the database based on the recognized id.
+Marking Attendance:
+
+If a recognized face has high confidence, the mark_attendance function is called with the student's information (i, r, n, d) to mark their attendance.
+Handling Unrecognized Faces:
+
+If the confidence is below the set threshold, the face is considered an "Unknown Face," and a red rectangle is drawn around it with the label "Unknown Face."
+Return Value:
+
+The coord variable, which contains the coordinates of the detected faces, is returned by the draw_boundary function. These coordinates can be used for further processing if needed.
+In summary, the recognize function processes each frame from the webcam, detects faces using the Haar Cascade classifier, recognizes faces using the pre-trained LBPH classifier, and displays recognized information on the image frame. If the recognition confidence is high enough, attendance is marked for the recognized student. Unrecognized faces are labeled as "Unknown Face." The process continues until the user decides to exit the recognition loop by pressing the Enter key.
+
+
+
+
+User
+how it is predict the current face is already trained and then marke attendance
+ChatGPT
+The prediction of whether the current face is already trained and the subsequent marking of attendance in the provided code work as follows:
+
+Training the Face Recognition Classifier:
+
+Before running the face recognition system, a classifier is trained using pre-existing student face data. This classifier is created and trained with student face images and their corresponding student IDs.
+Face Recognition during Live Capture:
+
+The face recognition process occurs during the live video capture from the webcam.
+For each frame of the video stream, the system attempts to recognize the face in that frame.
+Recognition Confidence:
+
+When the system recognizes a face in the live frame, it calculates a confidence score. This confidence score is based on how closely the features of the detected face match the features of the faces in the training dataset.
+The LBPH (Local Binary Pattern Histogram) face recognizer, which has been trained previously, is used to make this prediction.
+The confidence score represents the system's level of confidence in its prediction. Higher confidence scores indicate a stronger recognition.
+Threshold for Confidence:
+
+The code uses a predefined threshold value for confidence (in this case, a threshold of 79). If the calculated confidence score for a recognized face is greater than this threshold, the system considers it a successful recognition.
+You can adjust this threshold value based on your requirements and the performance of your face recognition system.
+Marking Attendance:
+
+If the system recognizes a face with a confidence score greater than the threshold, it proceeds to mark attendance for the recognized student.
+The mark_attendance function is called with the student's information, which includes their student ID (i), roll number (r), name (n), and department (d).
+The mark_attendance function then records the student's attendance, including the date and time of the recognition, in an attendance file or database.
+Handling Unrecognized Faces:
+
+If the confidence score for a recognized face is below the set threshold, the system considers it an "Unknown Face."
+In this case, the system can choose not to mark attendance for unknown faces, as attendance is typically marked only for recognized and registered students.
+Unrecognized faces are labeled as "Unknown Face" on the video frame.
+In summary, the code determines whether a face is recognized and whether it meets the confidence threshold. If the recognition confidence is high enough, the system identifies the student and marks their attendance. If the confidence is below the threshold or the face is unrecognized, the system does not mark attendance for that face. This process allows the system to only mark attendance for students who are recognized based on the pre-trained classifier's predictions.
+
+
+
+
+User
+so basically it first create classifier file during training and at the time of attendance its check the face data in the classifier. am I right?
+ChatGPT
+Yes, you are correct. The face recognition system follows these key steps:
+
+Training:
+
+During the training phase, the system creates and trains a face recognition classifier using a dataset of student faces.
+The training data includes images of students' faces along with their corresponding student IDs.
+This classifier is saved to a file (in this case, "classifier.xml") after training.
+Attendance Marking:
+
+During attendance marking, the system utilizes the pre-trained classifier.
+When it captures a live video frame, it detects and recognizes faces in that frame using the classifier.
+It calculates a confidence score for each recognized face based on the classifier's predictions.
+If the confidence score for a recognized face exceeds a predefined threshold (e.g., 79 in your code), the system considers it a successful recognition.
+For recognized faces, the system then marks their attendance by recording their student information in the attendance file or database.
+So, in summary, the classifier is indeed used during attendance marking to recognize faces in the live video stream. If a recognized face meets the confidence criteria, attendance is marked based on the student's information associated with that face in the training data. If the face is not recognized or doesn't meet the confidence threshold, it is treated as an unknown face, and attendance is not marked for that individual.
+
+
+
+
+User
+so how confidence score has been calculated 
+ChatGPT
+The confidence score in a face recognition system, such as the one implemented in your code, is typically calculated based on the degree of similarity between the features extracted from the detected face in the live video frame and the features of the faces in the training dataset. Here's a simplified explanation of how the confidence score is calculated:
+
+Feature Extraction:
+
+When the system detects a face in the live video frame, it extracts facial features from that face. These features are essentially numerical representations of various characteristics of the face, such as the positions of eyes, nose, and mouth, as well as texture patterns on the face.
+Comparison with Training Data:
+
+The extracted features from the live face are then compared to the features of the faces in the training dataset.
+For each face in the dataset, the system calculates a similarity score that indicates how closely the features of the detected face match those of the known faces in the dataset.
+Confidence Score:
+
+The confidence score is often calculated as the inverse of the similarity score. In other words, a higher similarity score results in a higher confidence score, and vice versa.
+It's common to scale and normalize the confidence score to a range of, for example, 0 to 100, for easier interpretation.
+The confidence score indicates how confident the system is in its recognition. A higher confidence score means that the system is more certain about the identity of the detected face.
+Threshold for Recognition:
+
+To decide whether the detected face should be recognized, the system compares the confidence score with a predefined threshold value.
+If the confidence score is greater than or equal to the threshold, the system recognizes the face as belonging to a known individual.
+If the confidence score is below the threshold, the system may consider the face as unknown or not recognized.
+Adjusting the Threshold:
+
+The threshold value can be adjusted based on the specific requirements of the application.
+A lower threshold makes the system more permissive, recognizing faces even with lower confidence, but it may lead to more false positives.
+A higher threshold makes the system more selective, requiring a higher confidence level for recognition, but it may result in more false negatives.
+In your code, you have set a threshold of 79 for recognition. This means that if the calculated confidence score for a detected face is greater than or equal to 79, the system considers it a successful recognition. You can adjust this threshold as needed to achieve the desired balance between recognition accuracy and false positives/negatives.
+
+
+
+
+User
+so when my interviewer ask for what is the accuracy how can I calculate the accuracy
+ChatGPT
+To calculate the accuracy of your face recognition system, you can use the following formula:
+
+Accuracy = (Number of Correct Recognitions) / (Total Number of Recognition Attempts) * 100
+
+Here's a breakdown of how to calculate accuracy:
+
+Number of Correct Recognitions:
+
+This is the total number of times your system correctly recognized a face. In your context, it means the number of times the confidence score for a recognized face was greater than or equal to your chosen recognition threshold (e.g., 79).
+Total Number of Recognition Attempts:
+
+This is the total number of face recognition attempts made by the system during the evaluation period. It includes both successful recognitions (correctly recognized faces) and unsuccessful recognitions (false positives and false negatives).
+Accuracy Percentage:
+
+To express accuracy as a percentage, multiply the ratio of correct recognitions to total recognition attempts by 100.
+For example, let's say your system made 500 recognition attempts during an evaluation, and out of those, it correctly recognized 450 faces. To calculate the accuracy:
+
+Accuracy = (450 / 500) * 100 = 90%
+
+So, in this scenario, your system achieved an accuracy of 90%.
+
+Keep in mind that accuracy is just one metric for evaluating the performance of a face recognition system. Depending on the application, you may also want to consider other metrics such as:
+
+False Positive Rate (FPR): The rate at which the system incorrectly recognizes a face that should not have been recognized.
+
+False Negative Rate (FNR): The rate at which the system fails to recognize a face that should have been recognized.
+
+Precision: The proportion of correctly recognized faces among all the faces the system claimed to recognize.
+
+Recall (Sensitivity): The proportion of correctly recognized faces among all the faces that should have been recognized.
+
+F1 Score: A combination of precision and recall, useful for balancing trade-offs between false positives and false negatives.
+
+These metrics provide a more comprehensive evaluation of the system's performance, especially in scenarios where false positives or false negatives have significant consequences.
